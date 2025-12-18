@@ -30,18 +30,7 @@ Automatically switch between light and dark themes in Windows based on time of d
 1. Download `AutoTheme.ps1` from this repository
 2. Save it anywhere on your computer (Desktop, Downloads, etc.)
 
-### Step 2: Enable Night Light (First Time Only)
-
-**Important:** Before running the script, enable Night Light manually once:
-
-1. Go to **Settings** → **System** → **Display**
-2. Turn on **Night Light**
-3. Set any intensity (the script will manage it later)
-4. Close Settings
-
-This step is required because Windows needs to initialize Night Light's registry keys.
-
-### Step 3: Run the Script
+### Step 2: Run the Script
 
 1. **Right-click** on `windows_theme_automation.ps1`
 2. Select **"Run with PowerShell"**
@@ -111,9 +100,12 @@ The script automatically restarts Windows Explorer. If issues persist:
 1. Log out and log back in
 2. Restart your computer
 
-### Night Light doesn't change
+### Night Light doesn't change or colors look wrong
 
-Make sure you enabled Night Light manually at least once (see Installation Step 2).
+The script uses direct gamma adjustment instead of Windows Night Light. If you experience issues:
+1. Make sure the script is running with Administrator privileges
+2. Try adjusting the intensity values in the script
+3. Restart your computer to reset display gamma
 
 ### Script doesn't run automatically
 
@@ -146,10 +138,17 @@ And creates two scheduled tasks in Windows Task Scheduler.
 
 ## 🔒 Security
 
-- The script only modifies Windows theme and Night Light settings
+- The script only modifies Windows theme and display gamma settings
 - No network access or external connections
 - Open source - you can review all code
-- Runs with your user privileges (requires admin only for Task Scheduler)
+- Requires admin privileges for Task Scheduler and Explorer restart
+
+## 🛠️ Technical Details
+
+The script uses:
+- **Registry modification** for Windows theme (Light/Dark mode)
+- **Direct gamma control via Win32 API** for warm color adjustment (Night Light effect)
+- **Color temperature algorithm** to convert warmth percentage to RGB values (6500K to 2700K range)
 
 ## 🤝 Contributing
 
@@ -170,6 +169,12 @@ If this script helped you, please consider:
 - Reporting any issues you find
 
 ## 📝 Changelog
+
+### Version 1.1.0
+- **Improved Night Light control** - Now uses direct gamma adjustment via Win32 API
+- More reliable warm color application
+- No longer requires manual Night Light activation
+- Better PowerShell 5.1 compatibility
 
 ### Version 1.0.0
 - Initial release

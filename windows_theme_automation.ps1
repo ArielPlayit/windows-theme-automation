@@ -45,166 +45,117 @@ function Set-WindowsTheme {
 
 function Set-NightLight {
     param(
-        [int]$Intensity,  # 0-100 (will be converted to color temperature)
+        [int]$Percentage,  # 0-100 (0 = neutral/off, 100 = warmest)
         [bool]$Enable
     )
     
     try {
-        # Registry paths for Night Light
-        $BasePath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current"
-        $StatePath = "$BasePath\default`$windows.data.bluelightreduction.bluelightreductionstate\windows.data.bluelightreduction.bluelightreductionstate"
-        $SettingsPath = "$BasePath\default`$windows.data.bluelightreduction.settings\windows.data.bluelightreduction.settings"
-        
-        # Convert intensity (0-100) to color temperature value
-        # Range: 13 (0% = 6500K cool) to 68 (100% = 1200K warm)
-        $tempValue = [Math]::Round(13 + (($Intensity / 100) * (68 - 13)))
-        
-        # ========== HANDLE NIGHT LIGHT STATE (ON/OFF) ==========
-        $stateData = $null
-        
-        # Try to read existing state data
-        if (Test-Path $StatePath) {
-            try {
-                $existingState = Get-ItemProperty -Path $StatePath -Name "Data" -ErrorAction SilentlyContinue
-                if ($existingState -and $existingState.Data) {
-                    $stateData = [byte[]]$existingState.Data
-                }
-            } catch { }
+        # If not enabled, reset to neutral
+        if (-not $Enable) {
+            $Percentage = 0
         }
         
-        if ($stateData -and $stateData.Length -gt 18) {
-            # Modify existing data - find and change the enable/disable byte
-            # The state flag is typically after the "CB" marker (0x43, 0x42)
-            for ($i = 0; $i -lt $stateData.Length - 2; $i++) {
-                if ($stateData[$i] -eq 0x43 -and $stateData[$i+1] -eq 0x42) {
-                    # Found CB marker, state byte is usually at offset +4 or +5
-                    if ($i + 5 -lt $stateData.Length) {
-                        if ($Enable) {
-                            $stateData[$i + 4] = 0x02  # Enable flag
-                            if ($i + 6 -lt $stateData.Length) {
-                                $stateData[$i + 5] = 0x01
-                            }
-                        } else {
-                            $stateData[$i + 4] = 0x00  # Disable flag
-                            if ($i + 6 -lt $stateData.Length) {
-                                $stateData[$i + 5] = 0x00
-                            }
-                        }
-                    }
-                    break
-                }
-            }
-        } else {
-            # No existing data - create minimal valid structure
-            # This is a known-working structure for Windows 10/11
-            if ($Enable) {
-                $stateData = [byte[]](
-                    0x02, 0x00, 0x00, 0x00,
-                    0x56, 0x3A, 0xCC, 0x9A, 0xDE, 0xB8, 0xDA, 0x01,  # Timestamp
-                    0x00, 0x00, 0x00, 0x00,
-                    0x43, 0x42, 0x01, 0x00,
-                    0x02, 0x01,  # Enabled state
-                    0xCA, 0x14, 0x0E,
-                    0x15,  # Active
-                    0x00, 0x00, 0x00, 0x00
-                )
-            } else {
-                $stateData = [byte[]](
-                    0x02, 0x00, 0x00, 0x00,
-                    0x56, 0x3A, 0xCC, 0x9A, 0xDE, 0xB8, 0xDA, 0x01,
-                    0x00, 0x00, 0x00, 0x00,
-                    0x43, 0x42, 0x01, 0x00,
-                    0x00, 0x00,  # Disabled state
-                    0xCA, 0x14, 0x0E,
-                    0x00,
-                    0x00, 0x00, 0x00, 0x00
-                )
-            }
-            
-            # Create registry path if needed
-            $StateParent = Split-Path $StatePath -Parent
-            if (-not (Test-Path $StateParent)) {
-                New-Item -Path $StateParent -Force | Out-Null
-            }
-            if (-not (Test-Path $StatePath)) {
-                New-Item -Path $StatePath -Force | Out-Null
-            }
-        }
+        # Clamp percentage
+        if ($Percentage -lt 0) { $Percentage = 0 }
+        if ($Percentage -gt 100) { $Percentage = 100 }
         
-        Set-ItemProperty -Path $StatePath -Name "Data" -Value $stateData -Type Binary -Force
-        
-        # ========== HANDLE INTENSITY SETTINGS ==========
-        $settingsData = $null
-        
-        if (Test-Path $SettingsPath) {
-            try {
-                $existingSettings = Get-ItemProperty -Path $SettingsPath -Name "Data" -ErrorAction SilentlyContinue
-                if ($existingSettings -and $existingSettings.Data) {
-                    $settingsData = [byte[]]$existingSettings.Data
-                }
-            } catch { }
-        }
-        
-        if ($settingsData -and $settingsData.Length -gt 15) {
-            # Modify existing settings - find the temperature value after CA marker
-            for ($i = 0; $i -lt $settingsData.Length - 3; $i++) {
-                if ($settingsData[$i] -eq 0xCA -and ($settingsData[$i+1] -eq 0x0E -or $settingsData[$i+1] -eq 0x14)) {
-                    # Found settings marker, temperature is next byte
-                    if ($i + 2 -lt $settingsData.Length) {
-                        $settingsData[$i + 2] = [byte]$tempValue
-                    }
-                    break
-                }
-            }
-        } else {
-            # Create new settings structure
-            $settingsData = [byte[]](
-                0x02, 0x00, 0x00, 0x00,
-                0x56, 0x3A, 0xCC, 0x9A, 0xDE, 0xB8, 0xDA, 0x01,
-                0x00, 0x00, 0x00, 0x00,
-                0x43, 0x42, 0x01, 0x00,
-                0xCA, 0x0E, [byte]$tempValue,
-                0xCF, 0x28,
-                0xCA, 0x32, 0x00, 0x00,
-                0xCA, 0x2A, 0x00, 0x00
-            )
-            
-            $SettingsParent = Split-Path $SettingsPath -Parent
-            if (-not (Test-Path $SettingsParent)) {
-                New-Item -Path $SettingsParent -Force | Out-Null
-            }
-            if (-not (Test-Path $SettingsPath)) {
-                New-Item -Path $SettingsPath -Force | Out-Null
-            }
-        }
-        
-        Set-ItemProperty -Path $SettingsPath -Name "Data" -Value $settingsData -Type Binary -Force
-        
-        $statusText = if ($Enable) { "ENABLED" } else { "DISABLED" }
-        Write-Host "Night Light: $statusText at $Intensity% intensity" -ForegroundColor Yellow
-        
-        # Broadcast settings change to refresh display
-        Add-Type -TypeDefinition @"
+        # Add required Win32 API for gamma control
+        Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
-public class NightLightHelper {
-    [DllImport("user32.dll", SetLastError = true)]
-    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
+
+public class GammaController {
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetDC(IntPtr hWnd);
     
-    public static void NotifySettingsChange() {
-        IntPtr result;
-        SendMessageTimeout((IntPtr)0xFFFF, 0x001A, IntPtr.Zero, "ImmersiveColorSet", 0x0002, 1000, out result);
+    [DllImport("user32.dll")]
+    public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+    
+    [DllImport("gdi32.dll")]
+    public static extern bool SetDeviceGammaRamp(IntPtr hDC, ref RAMP lpRamp);
+    
+    [DllImport("gdi32.dll")]
+    public static extern bool GetDeviceGammaRamp(IntPtr hDC, ref RAMP lpRamp);
+    
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    public struct RAMP {
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
+        public ushort[] Red;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
+        public ushort[] Green;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
+        public ushort[] Blue;
+    }
+    
+    public static void SetGamma(double redMult, double greenMult, double blueMult) {
+        RAMP ramp = new RAMP();
+        ramp.Red = new ushort[256];
+        ramp.Green = new ushort[256];
+        ramp.Blue = new ushort[256];
+        
+        for (int i = 0; i < 256; i++) {
+            int redVal = (int)(i * 255 * redMult);
+            int greenVal = (int)(i * 255 * greenMult);
+            int blueVal = (int)(i * 255 * blueMult);
+            
+            ramp.Red[i] = (ushort)Math.Min(65535, Math.Max(0, redVal));
+            ramp.Green[i] = (ushort)Math.Min(65535, Math.Max(0, greenVal));
+            ramp.Blue[i] = (ushort)Math.Min(65535, Math.Max(0, blueVal));
+        }
+        
+        IntPtr hDC = GetDC(IntPtr.Zero);
+        SetDeviceGammaRamp(hDC, ref ramp);
+        ReleaseDC(IntPtr.Zero, hDC);
     }
 }
-"@ -ErrorAction SilentlyContinue
+'@ -ErrorAction SilentlyContinue
         
-        try {
-            [NightLightHelper]::NotifySettingsChange()
-        } catch { }
+        # Convert percentage to color temperature (Kelvin)
+        # 0% = 6500K (neutral daylight), 100% = 2700K (warm candlelight)
+        $minTemp = 2700   # Warmest (100%)
+        $maxTemp = 6500   # Neutral (0%)
+        $temperature = $maxTemp - (($Percentage / 100) * ($maxTemp - $minTemp))
+        
+        # Calculate RGB multipliers based on color temperature
+        # Algorithm based on Tanner Helland's work
+        $temp = $temperature / 100
+        
+        # Calculate Red
+        if ($temperature -le 6600) {
+            $red = 1.0
+        } else {
+            $red = [Math]::Pow(($temp - 60), -0.1332047592) * 329.698727446 / 255
+            $red = [Math]::Max(0, [Math]::Min(1, $red))
+        }
+        
+        # Calculate Green
+        if ($temperature -le 6600) {
+            $green = [Math]::Log($temp) * 99.4708025861 - 161.1195681661
+            $green = $green / 255
+        } else {
+            $green = [Math]::Pow(($temp - 60), -0.0755148492) * 288.1221695283 / 255
+        }
+        $green = [Math]::Max(0, [Math]::Min(1, $green))
+        
+        # Calculate Blue
+        if ($temperature -ge 6600) {
+            $blue = 1.0
+        } elseif ($temperature -le 1900) {
+            $blue = 0.0
+        } else {
+            $blue = [Math]::Log($temp - 10) * 138.5177312231 - 305.0447927307
+            $blue = $blue / 255
+            $blue = [Math]::Max(0, [Math]::Min(1, $blue))
+        }
+        
+        # Apply gamma
+        [GammaController]::SetGamma($red, $green, $blue)
+        
+        $statusText = if ($Enable -and $Percentage -gt 0) { "ENABLED at ${Percentage}% warmth (~${temperature}K)" } else { "DISABLED (neutral colors)" }
+        Write-Host "Night Light: $statusText" -ForegroundColor Yellow
         
     } catch {
-        Write-Host "Error configuring Night Light: $_" -ForegroundColor Red
-        Write-Host "Try enabling Night Light manually once in Settings > Display > Night Light" -ForegroundColor Yellow
+        Write-Host "Error setting Night Light: $_" -ForegroundColor Red
     }
 }
 
@@ -217,12 +168,12 @@ function Apply-ThemeSettings {
     if ($CurrentHour -ge 7 -and $CurrentHour -lt 19) {
         Write-Host "DAY configuration (7am-7pm)" -ForegroundColor Green
         Set-WindowsTheme -Mode "Light"
-        Set-NightLight -Intensity 20 -Enable $true
+        Set-NightLight -Percentage 20 -Enable $true
     }
     else {
         Write-Host "NIGHT configuration (7pm-7am)" -ForegroundColor Cyan
         Set-WindowsTheme -Mode "Dark"
-        Set-NightLight -Intensity 50 -Enable $true
+        Set-NightLight -Percentage 50 -Enable $true
     }
     
     Write-Host "`nSuccessfully applied!`n" -ForegroundColor Magenta
