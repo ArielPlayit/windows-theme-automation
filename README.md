@@ -7,7 +7,7 @@ Automatically switch between light and dark themes in Windows based on time of d
 - 🌞 **Automatic Day Mode** (7 AM - 7 PM)
   - Light theme
   - Night Light at 20% intensity
-  
+
 - 🌙 **Automatic Night Mode** (7 PM - 7 AM)
   - Dark theme
   - Night Light at 50% intensity
