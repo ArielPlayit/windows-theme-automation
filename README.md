@@ -1,4 +1,4 @@
-﻿# 🌓 Windows Theme Automation
+# 🌓 Windows Theme Automation
 
 Automatically switch between light and dark themes in Windows based on time of day, with configurable Night Light intensity.
 
