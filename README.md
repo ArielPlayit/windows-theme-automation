@@ -1,4 +1,4 @@
-# 🌓 Windows Theme Automation
+﻿# 🌓 Windows Theme Automation
 
 Automatically switch between light and dark themes in Windows based on time of day, with configurable Night Light intensity.
 
@@ -169,6 +169,11 @@ If this script helped you, please consider:
 - Reporting any issues you find
 
 ## 📝 Changelog
+
+### Version 1.2.0
+- **Script improvements** - Updated and enhanced script functions
+- Code synchronization with latest local changes
+- General stability and reliability improvements
 
 ### Version 1.1.0
 - **Improved Night Light control** - Now uses direct gamma adjustment via Win32 API
