@@ -1,31 +1,29 @@
 # 🌓 Windows Theme Automation
 
-
 Automatically switch between light and dark themes in Windows based on time of day, with configurable Night Light intensity.
 
-## âœ¨ Features
+## ✨ Features
 
-- ðŸŒž **Automatic Day Mode** (7 AM - 7 PM)
+- 🌞 **Automatic Day Mode** (7 AM - 7 PM)
   - Light theme
   - Night Light at 20% intensity
 
 - 🌙 **Automatic Night Mode** (7 PM - 7 AM)
-
   - Dark theme
   - Night Light at 50% intensity
 
-- âš¡ **Runs in Background** - No manual intervention needed
-- ðŸ”„ **Auto-start on Login** - Applies theme when Windows starts
-- â° **Hourly Checks** - Ensures theme is always correct
-- ðŸŽ¯ **One-Click Installation** - No need to configure Task Scheduler manually
+- ⚡ **Runs in Background** - No manual intervention needed
+- 🔄 **Auto-start on Login** - Applies theme when Windows starts
+- ⏰ **Hourly Checks** - Ensures theme is always correct
+- 🎯 **One-Click Installation** - No need to configure Task Scheduler manually
 
-## ðŸ“‹ Requirements
+## 📋 Requirements
 
 - Windows 10 or Windows 11
 - PowerShell 5.1 or later (pre-installed on Windows)
 - Administrator privileges (script will request them automatically)
 
-## ðŸš€ Installation
+## 🚀 Installation
 
 ### Step 1: Download the Script
 
@@ -40,7 +38,7 @@ Automatically switch between light and dark themes in Windows based on time of d
 4. Select option **1** (Install automation)
 5. Done! The script is now installed and running
 
-## ðŸŽ® Usage
+## 🎮 Usage
 
 ### Menu Options
 
@@ -56,13 +54,13 @@ When you run the script, you'll see a menu:
 ### After Installation
 
 The script runs automatically:
-- âœ… Every hour to check and apply the correct theme
-- âœ… When you log in to Windows
-- âœ… Works silently in the background
+- ✅ Every hour to check and apply the correct theme
+- ✅ When you log in to Windows
+- ✅ Works silently in the background
 
 **You don't need to run the script again!**
 
-## âš™ï¸ Customization
+## ⚙️ Customization
 
 To change the schedule or intensity levels, edit the `Apply-ThemeSettings` function in the script:
 
@@ -87,7 +85,7 @@ else {
 
 After making changes, reinstall the script (option 3 to uninstall, then option 1 to install).
 
-## ðŸ”§ Troubleshooting
+## 🔧 Troubleshooting
 
 ### "Cannot load file" error
 
@@ -119,7 +117,7 @@ Check that the scheduled tasks were created:
 
 If missing, run the script again and select option 1 to reinstall.
 
-## ðŸ—‘ï¸ Uninstallation
+## 🗑️ Uninstallation
 
 1. Run the script
 2. Select option **3** (Uninstall automation)
@@ -129,7 +127,7 @@ Alternatively, manually delete:
 - Scheduled tasks: `ThemeAutoSwitch_Hourly` and `ThemeAutoSwitch_Startup`
 - Script folder: `%LOCALAPPDATA%\WindowsThemeAuto`
 
-## ðŸ“ What Gets Installed
+## 📁 What Gets Installed
 
 The script installs to:
 ```
@@ -138,44 +136,39 @@ C:\Users\YourUsername\AppData\Local\WindowsThemeAuto\
 
 And creates two scheduled tasks in Windows Task Scheduler.
 
-## ðŸ”’ Security
+## 🔒 Security
 
 - The script only modifies Windows theme and display gamma settings
 - No network access or external connections
 - Open source - you can review all code
 - Requires admin privileges for Task Scheduler and Explorer restart
 
-## ðŸ› ï¸ Technical Details
+## 🛠️ Technical Details
 
 The script uses:
 - **Registry modification** for Windows theme (Light/Dark mode)
 - **Direct gamma control via Win32 API** for warm color adjustment (Night Light effect)
 - **Color temperature algorithm** to convert warmth percentage to RGB values (6500K to 2700K range)
 
-## ðŸ¤ Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Feel free to:
 - Report bugs
 - Suggest new features
 - Submit pull requests
 
-## ðŸ“„ License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## â­ Support
+## ⭐ Support
 
 If this script helped you, please consider:
-- Giving it a â­ star on GitHub
+- Giving it a ⭐ star on GitHub
 - Sharing it with others
 - Reporting any issues you find
 
-## ðŸ“ Changelog
-### Version 1.2.0
-- Sincronización: se actualizaron y mejoraron funciones del script según cambios locales.
-- Commit: Update windows_theme_automation.ps1  sync local changes
-
-
+## 📝 Changelog
 
 ### Version 1.2.0
 - **Script improvements** - Updated and enhanced script functions
@@ -197,4 +190,4 @@ If this script helped you, please consider:
 
 ---
 
-**Made with â¤ï¸ for Windows users who love automation**
+**Made with ❤️ for Windows users who love automation**
