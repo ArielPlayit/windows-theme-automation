@@ -45,62 +45,166 @@ function Set-WindowsTheme {
 
 function Set-NightLight {
     param(
-        [int]$Intensity,
+        [int]$Intensity,  # 0-100 (will be converted to color temperature)
         [bool]$Enable
     )
     
     try {
-        # Method 1: Registry settings for Night Light
-        $NightLightPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\Cache\DefaultAccount"
+        # Registry paths for Night Light
+        $BasePath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current"
+        $StatePath = "$BasePath\default`$windows.data.bluelightreduction.bluelightreductionstate\windows.data.bluelightreduction.bluelightreductionstate"
+        $SettingsPath = "$BasePath\default`$windows.data.bluelightreduction.settings\windows.data.bluelightreduction.settings"
         
-        # Find the Night Light key
-        $NightLightKeys = Get-ChildItem -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store" -Recurse -ErrorAction SilentlyContinue | 
-            Where-Object { $_.Name -like "*windows.data.bluelightreduction.settings*" }
+        # Convert intensity (0-100) to color temperature value
+        # Range: 13 (0% = 6500K cool) to 68 (100% = 1200K warm)
+        $tempValue = [Math]::Round(13 + (($Intensity / 100) * (68 - 13)))
         
-        if ($NightLightKeys) {
-            foreach ($key in $NightLightKeys) {
-                try {
-                    $FullPath = $key.PSPath
-                    
-                    # Calculate intensity value (0-100 maps to 0-64 in hex)
-                    $IntensityValue = [Math]::Round($Intensity * 0.64)
-                    
-                    # Enable Night Light with specified intensity
-                    if ($Enable) {
-                        # Binary data structure for Night Light
-                        $header = [byte[]](0x43, 0x42, 0x01, 0x00, 0x0a, 0xd7, 0x23, 0xf1, 0x31, 0xd6, 0x01, 0x00)
-                        $data1 = [byte[]](0x43, 0x42, 0x01, 0x00, 0xca, 0x32, 0x01, 0x5d, 0x31, 0xd6, 0x01, 0x00)
-                        $data2 = [byte[]](0x15, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x2a, 0x07, 0x01, 0x00)
-                        $data3 = [byte[]](0x1e, 0x00, 0x00, 0x00, 0xcb, 0x00, 0x00, 0x00, 0x14, 0x05, 0x00, 0x00)
-                        $intensity = [byte[]]([byte]$IntensityValue, 0x00, 0x00, 0x00)
-                        
-                        $fullData = $header + $data1 + $data2 + $data3 + $intensity
-                        
-                        Set-ItemProperty -Path $FullPath -Name "Data" -Value $fullData -Type Binary -Force
+        # ========== HANDLE NIGHT LIGHT STATE (ON/OFF) ==========
+        $stateData = $null
+        
+        # Try to read existing state data
+        if (Test-Path $StatePath) {
+            try {
+                $existingState = Get-ItemProperty -Path $StatePath -Name "Data" -ErrorAction SilentlyContinue
+                if ($existingState -and $existingState.Data) {
+                    $stateData = [byte[]]$existingState.Data
+                }
+            } catch { }
+        }
+        
+        if ($stateData -and $stateData.Length -gt 18) {
+            # Modify existing data - find and change the enable/disable byte
+            # The state flag is typically after the "CB" marker (0x43, 0x42)
+            for ($i = 0; $i -lt $stateData.Length - 2; $i++) {
+                if ($stateData[$i] -eq 0x43 -and $stateData[$i+1] -eq 0x42) {
+                    # Found CB marker, state byte is usually at offset +4 or +5
+                    if ($i + 5 -lt $stateData.Length) {
+                        if ($Enable) {
+                            $stateData[$i + 4] = 0x02  # Enable flag
+                            if ($i + 6 -lt $stateData.Length) {
+                                $stateData[$i + 5] = 0x01
+                            }
+                        } else {
+                            $stateData[$i + 4] = 0x00  # Disable flag
+                            if ($i + 6 -lt $stateData.Length) {
+                                $stateData[$i + 5] = 0x00
+                            }
+                        }
                     }
-                } catch {
-                    # Continue to next key if this one fails
+                    break
                 }
             }
-        }
-        
-        # Method 2: Additional registry settings
-        $BlueLightPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current\default`$windows.data.bluelightreduction.bluelightreductionstate\windows.data.bluelightreduction.bluelightreductionstate"
-        
-        if (Test-Path $BlueLightPath) {
+        } else {
+            # No existing data - create minimal valid structure
+            # This is a known-working structure for Windows 10/11
             if ($Enable) {
-                # Enable with 1, disable with 0
-                Set-ItemProperty -Path $BlueLightPath -Name "Data" -Value ([byte[]](0x02, 0x00, 0x00, 0x00, 0x2f, 0x1f, 0x5a, 0x81, 0xf8, 0xd5, 0x01, 0x00, 0x43, 0x42, 0x01, 0x00, 0xca, 0x32, 0x5a, 0x81, 0xf8, 0xd5, 0x01, 0x00, 0x15, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x2b, 0x05, 0x01, 0x00, 0x14, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00)) -Type Binary -Force
+                $stateData = [byte[]](
+                    0x02, 0x00, 0x00, 0x00,
+                    0x56, 0x3A, 0xCC, 0x9A, 0xDE, 0xB8, 0xDA, 0x01,  # Timestamp
+                    0x00, 0x00, 0x00, 0x00,
+                    0x43, 0x42, 0x01, 0x00,
+                    0x02, 0x01,  # Enabled state
+                    0xCA, 0x14, 0x0E,
+                    0x15,  # Active
+                    0x00, 0x00, 0x00, 0x00
+                )
+            } else {
+                $stateData = [byte[]](
+                    0x02, 0x00, 0x00, 0x00,
+                    0x56, 0x3A, 0xCC, 0x9A, 0xDE, 0xB8, 0xDA, 0x01,
+                    0x00, 0x00, 0x00, 0x00,
+                    0x43, 0x42, 0x01, 0x00,
+                    0x00, 0x00,  # Disabled state
+                    0xCA, 0x14, 0x0E,
+                    0x00,
+                    0x00, 0x00, 0x00, 0x00
+                )
+            }
+            
+            # Create registry path if needed
+            $StateParent = Split-Path $StatePath -Parent
+            if (-not (Test-Path $StateParent)) {
+                New-Item -Path $StateParent -Force | Out-Null
+            }
+            if (-not (Test-Path $StatePath)) {
+                New-Item -Path $StatePath -Force | Out-Null
             }
         }
         
-        Write-Host "Night light set to $Intensity%" -ForegroundColor Yellow
+        Set-ItemProperty -Path $StatePath -Name "Data" -Value $stateData -Type Binary -Force
         
-        # Force a settings refresh
-        $null = Start-Process -FilePath "reg.exe" -ArgumentList "add `"HKCU\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store`" /f" -WindowStyle Hidden -Wait
+        # ========== HANDLE INTENSITY SETTINGS ==========
+        $settingsData = $null
+        
+        if (Test-Path $SettingsPath) {
+            try {
+                $existingSettings = Get-ItemProperty -Path $SettingsPath -Name "Data" -ErrorAction SilentlyContinue
+                if ($existingSettings -and $existingSettings.Data) {
+                    $settingsData = [byte[]]$existingSettings.Data
+                }
+            } catch { }
+        }
+        
+        if ($settingsData -and $settingsData.Length -gt 15) {
+            # Modify existing settings - find the temperature value after CA marker
+            for ($i = 0; $i -lt $settingsData.Length - 3; $i++) {
+                if ($settingsData[$i] -eq 0xCA -and ($settingsData[$i+1] -eq 0x0E -or $settingsData[$i+1] -eq 0x14)) {
+                    # Found settings marker, temperature is next byte
+                    if ($i + 2 -lt $settingsData.Length) {
+                        $settingsData[$i + 2] = [byte]$tempValue
+                    }
+                    break
+                }
+            }
+        } else {
+            # Create new settings structure
+            $settingsData = [byte[]](
+                0x02, 0x00, 0x00, 0x00,
+                0x56, 0x3A, 0xCC, 0x9A, 0xDE, 0xB8, 0xDA, 0x01,
+                0x00, 0x00, 0x00, 0x00,
+                0x43, 0x42, 0x01, 0x00,
+                0xCA, 0x0E, [byte]$tempValue,
+                0xCF, 0x28,
+                0xCA, 0x32, 0x00, 0x00,
+                0xCA, 0x2A, 0x00, 0x00
+            )
+            
+            $SettingsParent = Split-Path $SettingsPath -Parent
+            if (-not (Test-Path $SettingsParent)) {
+                New-Item -Path $SettingsParent -Force | Out-Null
+            }
+            if (-not (Test-Path $SettingsPath)) {
+                New-Item -Path $SettingsPath -Force | Out-Null
+            }
+        }
+        
+        Set-ItemProperty -Path $SettingsPath -Name "Data" -Value $settingsData -Type Binary -Force
+        
+        $statusText = if ($Enable) { "ENABLED" } else { "DISABLED" }
+        Write-Host "Night Light: $statusText at $Intensity% intensity" -ForegroundColor Yellow
+        
+        # Broadcast settings change to refresh display
+        Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class NightLightHelper {
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
+    
+    public static void NotifySettingsChange() {
+        IntPtr result;
+        SendMessageTimeout((IntPtr)0xFFFF, 0x001A, IntPtr.Zero, "ImmersiveColorSet", 0x0002, 1000, out result);
+    }
+}
+"@ -ErrorAction SilentlyContinue
+        
+        try {
+            [NightLightHelper]::NotifySettingsChange()
+        } catch { }
         
     } catch {
-        Write-Host "Note: Night light settings may require manual activation in Windows Settings" -ForegroundColor Yellow
+        Write-Host "Error configuring Night Light: $_" -ForegroundColor Red
+        Write-Host "Try enabling Night Light manually once in Settings > Display > Night Light" -ForegroundColor Yellow
     }
 }
 
