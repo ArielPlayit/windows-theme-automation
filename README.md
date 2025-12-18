@@ -1,4 +1,4 @@
-﻿# 🌓 Windows Theme Automation
+# 🌓 Windows Theme Automation
 
 
 Automatically switch between light and dark themes in Windows based on time of day, with configurable Night Light intensity.
@@ -8,8 +8,9 @@ Automatically switch between light and dark themes in Windows based on time of d
 - ðŸŒž **Automatic Day Mode** (7 AM - 7 PM)
   - Light theme
   - Night Light at 20% intensity
-  
-- ðŸŒ™ **Automatic Night Mode** (7 PM - 7 AM)
+
+- 🌙 **Automatic Night Mode** (7 PM - 7 AM)
+
   - Dark theme
   - Night Light at 50% intensity
 
