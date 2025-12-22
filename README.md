@@ -44,122 +44,120 @@ Automatically switch between light and dark themes in Windows based on time of d
 
 When you run the script, you'll see a menu:
 
+# 🌓 Windows Theme Automation
+
+Automatically switch between Light and Dark themes in Windows based on time of day, and adjust Night Light intensity via the Windows registry.
+
+## ✨ Features
+
+- 🌞 Automatic Day Mode (07:00 — 18:59)
+  - Applies Light theme
+  - Sets Night Light to ~20% warmth
+
+- 🌙 Automatic Night Mode (19:00 — 06:59)
+  - Applies Dark theme
+  - Sets Night Light to ~50% warmth
+
+- 🔁 Runs via Scheduled Tasks (runs at 07:00, 19:00 and at user logon)
+  - Tasks created: `ThemeAutoSwitch_7AM`, `ThemeAutoSwitch_7PM`, `ThemeAutoSwitch_Startup`
+
+- ⚠️ Night Light registry adjustment
+  - The script writes binary Night Light settings directly into the user CloudStore registry blob. If Night Light hasn't been enabled once via Settings, the script will notify you.
+
+## 📋 Requirements
+
+- Windows 10 or Windows 11
+- PowerShell 5.1 or later
+- Administrator privileges for installation/uninstallation (the script will request elevation)
+
+## 🚀 Installation
+
+1. Place `windows_theme_automation.ps1` somewhere on your PC.
+2. Right-click the file and choose **Run with PowerShell** (or run from an elevated PowerShell prompt).
+3. Choose **1. Install automation (recommended)** from the menu.
+
+What the installer does:
+- Copies the script to `%LOCALAPPDATA%\\WindowsThemeAuto\\`
+- Registers three scheduled tasks: `ThemeAutoSwitch_7AM`, `ThemeAutoSwitch_7PM`, and `ThemeAutoSwitch_Startup`
+- Runs the script once to apply current settings
+
+The scheduled tasks call the script with the `-AutoRun` switch so it executes without the interactive menu.
+
+## 🎮 Usage
+
+Run the script to see the interactive menu:
+
+- `1` — Install automation
+- `2` — Apply theme now (run `Apply-ThemeSettings` once)
+- `3` — Uninstall automation (removes tasks and installed copy)
+- `4` — Exit
+
+To run the script once (for example from Task Scheduler) use:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File "C:\\Path\\to\\windows_theme_automation.ps1" -AutoRun
 ```
-1. Install automation (recommended)    - Sets up automatic theme switching
-2. Apply theme now (without installing) - Applies current theme once
-3. Uninstall automation                - Removes all scheduled tasks
-4. Exit                                - Close the script
-```
-
-### After Installation
-
-The script runs automatically:
-- ✅ Every hour to check and apply the correct theme
-- ✅ When you log in to Windows
-- ✅ Works silently in the background
-
-**You don't need to run the script again!**
 
 ## ⚙️ Customization
 
-To change the schedule or intensity levels, edit the `Apply-ThemeSettings` function in the script:
+Edit `Apply-ThemeSettings` inside `windows_theme_automation.ps1` to change schedule or intensity values. The function uses `Set-NightLight -Percentage` (0..100) and `Set-WindowsTheme -Mode "Light"|"Dark"`.
+
+Example snippet from the script:
 
 ```powershell
 if ($CurrentHour -ge 7 -and $CurrentHour -lt 19) {
-    # Day Mode: 7 AM - 7 PM
     Set-WindowsTheme -Mode "Light"
-    Set-NightLight -Intensity 20 -Enable $true  # Change intensity here (0-100)
-}
-else {
-    # Night Mode: 7 PM - 7 AM
+    Set-NightLight -Percentage 20 -Enable $true
+} else {
     Set-WindowsTheme -Mode "Dark"
-    Set-NightLight -Intensity 50 -Enable $true  # Change intensity here (0-100)
+    Set-NightLight -Percentage 50 -Enable $true
 }
 ```
 
-**Example customizations:**
-
-- Change time: Modify `7` (7 AM) and `19` (7 PM) to your preferred hours
-- Adjust intensity: Change `20` and `50` to any value between 0-100
-- Disable Night Light during day: Set `Enable $false` for day mode
-
-After making changes, reinstall the script (option 3 to uninstall, then option 1 to install).
+After editing, uninstall and reinstall so the scheduled tasks use the updated copy.
 
 ## 🔧 Troubleshooting
 
-### "Cannot load file" error
-
-Run this command in PowerShell (as Administrator):
-```powershell
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-### Theme doesn't apply completely
-
-The script automatically restarts Windows Explorer. If issues persist:
-1. Log out and log back in
-2. Restart your computer
-
-### Night Light doesn't change or colors look wrong
-
-The script uses direct gamma adjustment instead of Windows Night Light. If you experience issues:
-1. Make sure the script is running with Administrator privileges
-2. Try adjusting the intensity values in the script
-3. Restart your computer to reset display gamma
-
-### Script doesn't run automatically
-
-Check that the scheduled tasks were created:
-1. Open **Task Scheduler**
-2. Look for tasks named:
-   - `ThemeAutoSwitch_Hourly`
-   - `ThemeAutoSwitch_Startup`
-
-If missing, run the script again and select option 1 to reinstall.
+- "Installation requires Administrator privileges": allow the elevation prompt.
+- "Night Light: Not initialized": open **Settings > System > Display > Night light** and enable it once; then rerun the script.
+- If Night Light changes don't take effect, the registry blob format might differ on some systems — ensure Night Light is enabled and try different percentage values.
+- If theme changes seem incomplete, signing out or restarting Windows will ensure settings apply.
 
 ## 🗑️ Uninstallation
 
-1. Run the script
-2. Select option **3** (Uninstall automation)
-3. The script will remove all scheduled tasks and files
-
-Alternatively, manually delete:
-- Scheduled tasks: `ThemeAutoSwitch_Hourly` and `ThemeAutoSwitch_Startup`
-- Script folder: `%LOCALAPPDATA%\WindowsThemeAuto`
+Run the script and select **3. Uninstall automation**. This removes the scheduled tasks and deletes `%LOCALAPPDATA%\\WindowsThemeAuto`.
 
 ## 📁 What Gets Installed
 
-The script installs to:
+Files are copied to:
+
 ```
-C:\Users\YourUsername\AppData\Local\WindowsThemeAuto\
+%LOCALAPPDATA%\\WindowsThemeAuto\\
 ```
 
-And creates two scheduled tasks in Windows Task Scheduler.
+Scheduled tasks created:
+- `ThemeAutoSwitch_7AM`
+- `ThemeAutoSwitch_7PM`
+- `ThemeAutoSwitch_Startup`
 
-## 🔒 Security
+## ⚒️ Technical details
 
-- The script only modifies Windows theme and display gamma settings
-- No network access or external connections
-- Open source - you can review all code
-- Requires admin privileges for Task Scheduler and Explorer restart
+- Theme switching: updates `HKCU:\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Themes\\\\Personalize` keys and restarts Explorer.
+- Night Light: edits the binary `Data` value under the user CloudStore path used by Windows Night Light (searches for a marker and updates two bytes representing temperature).
+- Scheduling: uses `Register-ScheduledTask` with an interactive principal so tasks run for the current user.
 
-## 🛠️ Technical Details
+## 🛡️ Safety & Privacy
 
-The script uses:
-- **Registry modification** for Windows theme (Light/Dark mode)
-- **Direct gamma control via Win32 API** for warm color adjustment (Night Light effect)
-- **Color temperature algorithm** to convert warmth percentage to RGB values (6500K to 2700K range)
-
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to:
-- Report bugs
-- Suggest new features
-- Submit pull requests
+- The script only modifies local registry values and scheduled tasks.
+- No network access or external connections.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License — see the `LICENSE` file.
+
+---
+
+If you'd like, I can also add a short checklist for verifying installation or a troubleshooting flow. Would you like that?
 
 ## ⭐ Support
 
@@ -167,27 +165,3 @@ If this script helped you, please consider:
 - Giving it a ⭐ star on GitHub
 - Sharing it with others
 - Reporting any issues you find
-
-## 📝 Changelog
-
-### Version 1.2.0
-- **Script improvements** - Updated and enhanced script functions
-- Code synchronization with latest local changes
-- General stability and reliability improvements
-
-### Version 1.1.0
-- **Improved Night Light control** - Now uses direct gamma adjustment via Win32 API
-- More reliable warm color application
-- No longer requires manual Night Light activation
-- Better PowerShell 5.1 compatibility
-
-### Version 1.0.0
-- Initial release
-- Automatic theme switching based on time
-- Night Light intensity control
-- One-click installation
-- Background execution
-
----
-
-**Made with ❤️ for Windows users who love automation**

@@ -1,6 +1,6 @@
 # ============================================
 # Auto-Installation Script for Windows Theme Automation
-# Day/Night Mode and Blue Light Filter
+# Day/Night Mode and Night Light Automation
 # ============================================
 
 # ============================================
@@ -35,131 +35,103 @@ function Set-WindowsTheme {
     Start-Process explorer.exe
 }
 
-function Set-BlueLight {
+function Set-NightLight {
     param(
-        [int]$Percentage,  # 0-100 (0 = neutral/off, 100 = warmest)
+        [int]$Percentage,  # 0-100
         [bool]$Enable
     )
     
     try {
-        # If not enabled, reset to neutral
-        if (-not $Enable) {
-            $Percentage = 0
+        # Registry path (using Current store which is the active one)
+        $settingsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current\default`$windows.data.bluelightreduction.settings\windows.data.bluelightreduction.settings"
+        
+        # Check if Night Light is initialized
+        if (-not (Test-Path $settingsPath)) {
+            Write-Host "Night Light: Not initialized. Please enable it manually once in Settings." -ForegroundColor Yellow
+            return
         }
         
-        # Clamp percentage
-        if ($Percentage -lt 0) { $Percentage = 0 }
-        if ($Percentage -gt 100) { $Percentage = 100 }
-        
-        # Define gamma control Win32 API
-        $gammaCode = @'
-using System;
-using System.Runtime.InteropServices;
-
-public class ScreenGamma {
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetDC(IntPtr hWnd);
-    
-    [DllImport("user32.dll")]
-    private static extern bool ReleaseDC(IntPtr hWnd, IntPtr hDC);
-    
-    [DllImport("gdi32.dll")]
-    private static extern bool SetDeviceGammaRamp(IntPtr hDC, ref GammaRampStruct lpRamp);
-    
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-    public struct GammaRampStruct {
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
-        public ushort[] Red;
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
-        public ushort[] Green;
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
-        public ushort[] Blue;
-    }
-    
-    public static bool SetGamma(int brightness, int temperature) {
-        IntPtr hDC = GetDC(IntPtr.Zero);
-        if (hDC == IntPtr.Zero) return false;
-        
-        GammaRampStruct ramp = new GammaRampStruct();
-        ramp.Red = new ushort[256];
-        ramp.Green = new ushort[256];
-        ramp.Blue = new ushort[256];
-        
-        // Blue light reduction
-        double blueMult = 1.0 - (temperature / 100.0 * 0.7);  // Reduce up to 70%
-        double greenMult = 1.0 - (temperature / 100.0 * 0.3); // Reduce up to 30%
-        double redMult = 1.0;  // Keep red at 100%
-        
-        double brightFactor = brightness / 100.0;
-        
-        for (int i = 0; i < 256; i++) {
-            int value = (i << 8) | i;
-            
-            int red = (int)(value * redMult * brightFactor);
-            int green = (int)(value * greenMult * brightFactor);
-            int blue = (int)(value * blueMult * brightFactor);
-            
-            ramp.Red[i] = (ushort)Math.Min(65535, Math.Max(0, red));
-            ramp.Green[i] = (ushort)Math.Min(65535, Math.Max(0, green));
-            ramp.Blue[i] = (ushort)Math.Min(65535, Math.Max(0, blue));
+        # Read existing settings data
+        try {
+            $prop = Get-ItemProperty -Path $settingsPath -Name "Data" -ErrorAction Stop
+            $settingsData = [byte[]]$prop.Data
+        } catch {
+            Write-Host "Night Light: Could not read settings data" -ForegroundColor Yellow
+            return
         }
         
-        bool result = SetDeviceGammaRamp(hDC, ref ramp);
-        ReleaseDC(IntPtr.Zero, hDC);
-        return result;
-    }
-    
-    public static bool ResetGamma() {
-        IntPtr hDC = GetDC(IntPtr.Zero);
-        if (hDC == IntPtr.Zero) return false;
-        
-        GammaRampStruct ramp = new GammaRampStruct();
-        ramp.Red = new ushort[256];
-        ramp.Green = new ushort[256];
-        ramp.Blue = new ushort[256];
-        
-        for (int i = 0; i < 256; i++) {
-            int value = (i << 8) | i;
-            ramp.Red[i] = (ushort)value;
-            ramp.Green[i] = (ushort)value;
-            ramp.Blue[i] = (ushort)value;
+        if ($settingsData.Length -lt 40) {
+            Write-Host "Night Light: Invalid data structure" -ForegroundColor Yellow
+            return
         }
         
-        bool result = SetDeviceGammaRamp(hDC, ref ramp);
-        ReleaseDC(IntPtr.Zero, hDC);
-        return result;
-    }
-}
-'@
+        # Calculate temperature value based on percentage
+        # Real values from your system:
+        # 20% = 0x5580 (21888 decimal)
+        # 50% = 0x3BAA (15274 decimal)
         
-        # Load the type if not already loaded
-        if (-not ([System.Management.Automation.PSTypeName]'ScreenGamma').Type) {
-            Add-Type -TypeDefinition $gammaCode -ErrorAction Stop
-        }
+        # Extended formula for 0-100%:
+        # At 0%: ~25600 (neutral/coolest)
+        # At 20%: 21888
+        # At 50%: 15274
+        # At 100%: ~2560 (warmest)
         
-        # Apply gamma settings
+        $tempValue = 0
         if ($Enable -and $Percentage -gt 0) {
-            $brightness = 100
-            $success = [ScreenGamma]::SetGamma($brightness, $Percentage)
-            
-            if ($success) {
-                $minTemp = 2700
-                $maxTemp = 6500
-                $temperature = [int]($maxTemp - (($Percentage / 100.0) * ($maxTemp - $minTemp)))
-                
-                Write-Host "Blue Light Filter: ENABLED at ${Percentage}% (~${temperature}K)" -ForegroundColor Yellow
+            # Linear interpolation between known points
+            if ($Percentage -le 20) {
+                # 0% to 20% range
+                $tempValue = [int](25600 - (($Percentage / 20.0) * (25600 - 21888)))
+            } elseif ($Percentage -le 50) {
+                # 20% to 50% range
+                $tempValue = [int](21888 - ((($Percentage - 20) / 30.0) * (21888 - 15274)))
             } else {
-                Write-Host "Warning: Could not apply blue light filter (driver limitation)" -ForegroundColor Yellow
+                # 50% to 100% range
+                $tempValue = [int](15274 - ((($Percentage - 50) / 50.0) * (15274 - 2560)))
             }
         } else {
-            $success = [ScreenGamma]::ResetGamma()
-            if ($success) {
-                Write-Host "Blue Light Filter: DISABLED (neutral colors)" -ForegroundColor Yellow
+            # Disabled or 0% - set to neutral
+            $tempValue = 25600
+        }
+        
+        # Clamp to valid range
+        if ($tempValue -lt 2560) { $tempValue = 2560 }
+        if ($tempValue -gt 25600) { $tempValue = 25600 }
+        
+        # Convert to little-endian 16-bit bytes
+        $lowByte = [byte]($tempValue -band 0xFF)
+        $highByte = [byte](($tempValue -shr 8) -band 0xFF)
+        
+        # Find and update the CF 28 marker (temperature setting)
+        $found = $false
+        for ($i = 0; $i -lt ($settingsData.Length - 3); $i++) {
+            if ($settingsData[$i] -eq 0xCF -and $settingsData[$i+1] -eq 0x28) {
+                # Found temperature marker at position $i
+                # Next 2 bytes are the temperature value (little-endian)
+                $settingsData[$i+2] = $lowByte
+                $settingsData[$i+3] = $highByte
+                $found = $true
+                break
             }
         }
         
+        if (-not $found) {
+            Write-Host "Night Light: Could not find temperature marker in data" -ForegroundColor Yellow
+            return
+        }
+        
+        # ONLY modify the registry - NO gamma manipulation
+        Set-ItemProperty -Path $settingsPath -Name "Data" -Value $settingsData -Type Binary -Force
+        
+        # Calculate approximate color temperature for display
+        $colorTemp = [int](6500 - (($Percentage / 100.0) * (6500 - 2700)))
+        
+        $statusText = if ($Enable -and $Percentage -gt 0) { "ENABLED" } else { "DISABLED" }
+        Write-Host "Night Light: $statusText at $Percentage% (~${colorTemp}K)" -ForegroundColor Yellow
+        
     } catch {
-        Write-Host "Note: Blue light filter could not be applied" -ForegroundColor Yellow
+        Write-Host "Night Light: Error - $_" -ForegroundColor Red
+        Write-Host "Make sure Night Light is enabled in Settings > Display" -ForegroundColor Yellow
     }
 }
 
@@ -172,12 +144,12 @@ function Apply-ThemeSettings {
     if ($CurrentHour -ge 7 -and $CurrentHour -lt 19) {
         Write-Host "DAY configuration (7am-7pm)" -ForegroundColor Green
         Set-WindowsTheme -Mode "Light"
-        Set-BlueLight -Percentage 20 -Enable $true
+        Set-NightLight -Percentage 20 -Enable $true
     }
     else {
         Write-Host "NIGHT configuration (7pm-7am)" -ForegroundColor Cyan
         Set-WindowsTheme -Mode "Dark"
-        Set-BlueLight -Percentage 50 -Enable $true
+        Set-NightLight -Percentage 50 -Enable $true
     }
     
     Write-Host "`nSuccessfully applied!`n" -ForegroundColor Magenta
@@ -232,21 +204,20 @@ function Install-AutoScheduler {
     }
     
     # Remove existing tasks
-    $taskNameDaily = "ThemeAutoSwitch_Daily"
     $taskName7AM = "ThemeAutoSwitch_7AM"
     $taskName7PM = "ThemeAutoSwitch_7PM"
     $taskNameStartup = "ThemeAutoSwitch_Startup"
     
-    # Remove old hourly task if exists
+    # Remove old variants
     Unregister-ScheduledTask -TaskName "ThemeAutoSwitch_Hourly" -Confirm:$false -ErrorAction SilentlyContinue
-    Unregister-ScheduledTask -TaskName $taskNameDaily -Confirm:$false -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName "ThemeAutoSwitch_Daily" -Confirm:$false -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $taskName7AM -Confirm:$false -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $taskName7PM -Confirm:$false -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $taskNameStartup -Confirm:$false -ErrorAction SilentlyContinue
     
     Write-Host "`nCreating scheduled tasks..." -ForegroundColor Cyan
     
-    # Task 1: Run at 7 AM daily (switch to day mode)
+    # Task 1: Run at 7 AM daily
     $action7AM = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$finalScriptPath`" -AutoRun"
     $trigger7AM = New-ScheduledTaskTrigger -Daily -At "07:00"
     $principal7AM = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
@@ -255,7 +226,7 @@ function Install-AutoScheduler {
     Register-ScheduledTask -TaskName $taskName7AM -Action $action7AM -Trigger $trigger7AM -Principal $principal7AM -Settings $settings7AM -Description "Switches to Day Mode at 7 AM" -Force | Out-Null
     Write-Host "  Created: 7 AM daily task" -ForegroundColor Green
     
-    # Task 2: Run at 7 PM daily (switch to night mode)
+    # Task 2: Run at 7 PM daily
     $action7PM = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$finalScriptPath`" -AutoRun"
     $trigger7PM = New-ScheduledTaskTrigger -Daily -At "19:00"
     $principal7PM = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
