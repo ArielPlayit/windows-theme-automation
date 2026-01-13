@@ -6,7 +6,11 @@
 # ============================================
 # PARAMETERS - MUST BE FIRST
 # ============================================
-param([switch]$AutoRun)
+param(
+    [switch]$AutoRun,
+    [switch]$Install,
+    [switch]$Uninstall
+)
 
 # ============================================
 # MAIN FUNCTIONS
@@ -189,7 +193,8 @@ function Install-AutoScheduler {
             $scriptPath = $OriginalScriptPath
         }
         
-        $args = "-ExecutionPolicy Bypass -File `"$scriptPath`""
+        # Relaunch with -Install parameter to skip menu
+        $args = "-ExecutionPolicy Bypass -File `"$scriptPath`" -Install"
         Start-Process powershell.exe -Verb RunAs -ArgumentList $args
         exit
     }
@@ -289,7 +294,8 @@ function Uninstall-AutoScheduler {
         Start-Sleep -Seconds 2
         
         $scriptPath = $MyInvocation.MyCommand.Path
-        Start-Process powershell.exe -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass -Command `"& '$scriptPath'`""
+        # Relaunch with -Uninstall parameter to skip menu
+        Start-Process powershell.exe -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`" -Uninstall"
         exit
     }
     
@@ -315,11 +321,27 @@ function Uninstall-AutoScheduler {
 # MAIN MENU
 # ============================================
 
+# Handle parameter-based execution
 if ($AutoRun) {
     Apply-ThemeSettings
     exit
 }
 
+if ($Install) {
+    Write-Host "`n=== INSTALLING AUTOMATION ===" -ForegroundColor Cyan
+    Install-AutoScheduler -OriginalScriptPath $PSCommandPath
+    Apply-ThemeSettings
+    Write-Host "`nPress any key to exit..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit
+}
+
+if ($Uninstall) {
+    Uninstall-AutoScheduler
+    exit
+}
+
+# Show menu only if no parameters
 Clear-Host
 Write-Host "`n========================================================" -ForegroundColor Cyan
 Write-Host "   WINDOWS DAY/NIGHT THEME AUTOMATION" -ForegroundColor Cyan
