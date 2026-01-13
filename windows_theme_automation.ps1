@@ -28,11 +28,29 @@ function Set-WindowsTheme {
         Write-Host "Dark mode activated" -ForegroundColor Cyan
     }
     
-    # Restart Windows Explorer to apply theme changes immediately
-    Write-Host "Restarting Explorer to apply changes..." -ForegroundColor Yellow
-    Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
-    Start-Process explorer.exe
+    # Notify Windows of theme change without restarting Explorer
+    # This uses the same method Windows Settings uses
+    try {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class ThemeNotify {
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    public static extern int SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out IntPtr result);
+    
+    public static void NotifyThemeChange() {
+        IntPtr result;
+        // HWND_BROADCAST = 0xFFFF, WM_SETTINGCHANGE = 0x001A
+        SendMessageTimeout((IntPtr)0xFFFF, 0x001A, IntPtr.Zero, "ImmersiveColorSet", 2, 5000, out result);
+    }
+}
+'@ -ErrorAction SilentlyContinue
+        
+        [ThemeNotify]::NotifyThemeChange()
+        Write-Host "Theme change notification sent to Windows" -ForegroundColor Gray
+    } catch {
+        # Silently fail if notification doesn't work
+    }
 }
 
 function Set-NightLight {
