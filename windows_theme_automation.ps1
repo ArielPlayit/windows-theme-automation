@@ -257,10 +257,16 @@ function Install-AutoScheduler {
     $actionStartup = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$finalScriptPath`" -AutoRun"
     $triggerStartup = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERNAME"
     $principalStartup = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
-    $settingsStartup = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+    $settingsStartup = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
     
     Register-ScheduledTask -TaskName $taskNameStartup -Action $actionStartup -Trigger $triggerStartup -Principal $principalStartup -Settings $settingsStartup -Description "Applies correct theme at Windows login" -Force | Out-Null
     Write-Host "  Created: Login task" -ForegroundColor Green
+    
+    # Add a delay to the startup task to ensure Windows is fully loaded
+    $task = Get-ScheduledTask -TaskName $taskNameStartup
+    $task.Triggers[0].Delay = "PT30S"  # 30 second delay after login
+    $task | Set-ScheduledTask | Out-Null
+    Write-Host "    (with 30s delay to ensure Windows is ready)" -ForegroundColor Gray
     
     Write-Host "`nScheduled tasks created:" -ForegroundColor Green
     Write-Host "  - Runs at 7:00 AM daily (Day Mode)" -ForegroundColor White
