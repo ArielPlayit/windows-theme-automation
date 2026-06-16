@@ -1,167 +1,135 @@
-# 🌓 Windows Theme Automation
+# Windows Theme Automation
 
-Automatically switch between light and dark themes in Windows based on time of day, with configurable Night Light intensity.
+Windows Theme Automation switches Windows between day and night profiles and adjusts Night Light warmth automatically.
 
-## ✨ Features
+This repository is moving from a single PowerShell script to a .NET architecture:
 
-- 🌞 **Automatic Day Mode** (7 AM - 7 PM)
-  - Light theme
-  - Night Light at 20% intensity
+- `ThemeAutomation.Core`: shared automation logic and Windows integrations.
+- `ThemeAutomation.Cli`: `themeauto` command-line runner for scheduled tasks.
+- `ThemeAutomation.App`: WPF configuration app shell.
+- `windows_theme_automation.ps1`: compatibility launcher for existing users.
 
-- 🌙 **Automatic Night Mode** (7 PM - 7 AM)
-  - Dark theme
-  - Night Light at 50% intensity
+## Features
 
-- ⚡ **Runs in Background** - No manual intervention needed
-- 🔄 **Auto-start on Login** - Applies theme when Windows starts
-- ⏰ **Hourly Checks** - Ensures theme is always correct
-- 🎯 **One-Click Installation** - No need to configure Task Scheduler manually
+- Day profile from `07:00` to `18:59`
+  - Light Windows theme
+  - Night Light at 20 percent warmth
+- Night profile from `19:00` to `06:59`
+  - Dark Windows theme
+  - Night Light at 50 percent warmth
+- Native Night Light first, gamma fallback second
+- Scheduled tasks at day start, night start, and user logon
+- JSON configuration at `%LOCALAPPDATA%\WindowsThemeAuto\config.json`
+- Diagnostics for scheduled tasks and Night Light registry availability
 
-## 📋 Requirements
-
-- Windows 10 or Windows 11
-- PowerShell 5.1 or later (pre-installed on Windows)
-- Administrator privileges (script will request them automatically)
-
-## 🚀 Installation
-
-### Step 1: Download the Script
-
-1. Download `AutoTheme.ps1` from this repository
-2. Save it anywhere on your computer (Desktop, Downloads, etc.)
-
-### Step 2: Run the Script
-
-1. **Right-click** on `windows_theme_automation.ps1`
-2. Select **"Run with PowerShell"**
-3. If prompted, allow Administrator privileges
-4. Select option **1** (Install automation)
-5. Done! The script is now installed and running
-
-## 🎮 Usage
-
-### Menu Options
-
-When you run the script, you'll see a menu:
-
-# 🌓 Windows Theme Automation
-
-Automatically switch between Light and Dark themes in Windows based on time of day, and adjust Night Light intensity via the Windows registry.
-
-## ✨ Features
-
-- 🌞 Automatic Day Mode (07:00 — 18:59)
-  - Applies Light theme
-  - Sets Night Light to ~20% warmth
-
-- 🌙 Automatic Night Mode (19:00 — 06:59)
-  - Applies Dark theme
-  - Sets Night Light to ~50% warmth
-
-- 🔁 Runs via Scheduled Tasks (runs at 07:00, 19:00 and at user logon)
-  - Tasks created: `ThemeAutoSwitch_7AM`, `ThemeAutoSwitch_7PM`, `ThemeAutoSwitch_Startup`
-
-- ⚠️ Night Light registry adjustment
-  - The script writes binary Night Light settings directly into the user CloudStore registry blob. If Night Light hasn't been enabled once via Settings, the script will notify you.
-
-## 📋 Requirements
+## Requirements
 
 - Windows 10 or Windows 11
-- PowerShell 5.1 or later
-- Administrator privileges for installation/uninstallation (the script will request elevation)
+- .NET 8 SDK to build
+- .NET 8 Desktop Runtime to run the WPF app
 
-## 🚀 Installation
+## Download
 
-1. Place `windows_theme_automation.ps1` somewhere on your PC.
-2. Right-click the file and choose **Run with PowerShell** (or run from an elevated PowerShell prompt).
-3. Choose **1. Install automation (recommended)** from the menu.
+For normal use, download the latest GitHub release ZIP:
 
-What the installer does:
-- Copies the script to `%LOCALAPPDATA%\\WindowsThemeAuto\\`
-- Registers three scheduled tasks: `ThemeAutoSwitch_7AM`, `ThemeAutoSwitch_7PM`, and `ThemeAutoSwitch_Startup`
-- Runs the script once to apply current settings
+1. Go to **Releases**.
+2. Download `WindowsThemeAutomation-v0.1.0-win-x64.zip`.
+3. Extract the ZIP.
+4. Open `ThemeAutomation.App.exe` for the visual app.
 
-The scheduled tasks call the script with the `-AutoRun` switch so it executes without the interactive menu.
+`themeauto.exe` is the command-line tool used by scheduled tasks. It is normal for it to close quickly when double-clicked.
 
-## 🎮 Usage
-
-Run the script to see the interactive menu:
-
-- `1` — Install automation
-- `2` — Apply theme now (run `Apply-ThemeSettings` once)
-- `3` — Uninstall automation (removes tasks and installed copy)
-- `4` — Exit
-
-To run the script once (for example from Task Scheduler) use:
+## Build
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File "C:\\Path\\to\\windows_theme_automation.ps1" -AutoRun
+dotnet build .\ThemeAutomation.sln
 ```
 
-## ⚙️ Customization
-
-Edit `Apply-ThemeSettings` inside `windows_theme_automation.ps1` to change schedule or intensity values. The function uses `Set-NightLight -Percentage` (0..100) and `Set-WindowsTheme -Mode "Light"|"Dark"`.
-
-Example snippet from the script:
+Publish the CLI to the install directory:
 
 ```powershell
-if ($CurrentHour -ge 7 -and $CurrentHour -lt 19) {
-    Set-WindowsTheme -Mode "Light"
-    Set-NightLight -Percentage 20 -Enable $true
-} else {
-    Set-WindowsTheme -Mode "Dark"
-    Set-NightLight -Percentage 50 -Enable $true
-}
+dotnet publish .\src\ThemeAutomation.Cli\ThemeAutomation.Cli.csproj -c Release -o "$env:LOCALAPPDATA\WindowsThemeAuto"
 ```
 
-After editing, uninstall and reinstall so the scheduled tasks use the updated copy.
+Publish a local release build:
 
-## 🔧 Troubleshooting
-
-- "Installation requires Administrator privileges": allow the elevation prompt.
-- "Night Light: Not initialized": open **Settings > System > Display > Night light** and enable it once; then rerun the script.
-- If Night Light changes don't take effect, the registry blob format might differ on some systems — ensure Night Light is enabled and try different percentage values.
-- If theme changes seem incomplete, signing out or restarting Windows will ensure settings apply.
-
-## 🗑️ Uninstallation
-
-Run the script and select **3. Uninstall automation**. This removes the scheduled tasks and deletes `%LOCALAPPDATA%\\WindowsThemeAuto`.
-
-## 📁 What Gets Installed
-
-Files are copied to:
-
-```
-%LOCALAPPDATA%\\WindowsThemeAuto\\
+```powershell
+dotnet publish .\src\ThemeAutomation.App\ThemeAutomation.App.csproj -c Release -r win-x64 --self-contained false -o .\artifacts\WindowsThemeAutomation-v0.1.0-win-x64
+dotnet publish .\src\ThemeAutomation.Cli\ThemeAutomation.Cli.csproj -c Release -r win-x64 --self-contained false -o .\artifacts\WindowsThemeAutomation-v0.1.0-win-x64
 ```
 
-Scheduled tasks created:
+## CLI Usage
+
+```powershell
+themeauto apply
+themeauto install
+themeauto uninstall
+themeauto status
+themeauto diagnose
+```
+
+Commands:
+
+- `apply`: applies the correct profile for the current local time.
+- `install`: creates scheduled tasks for day start, night start, and logon.
+- `uninstall`: removes managed scheduled tasks.
+- `status`: shows active profile, config path, Night Light diagnostics, and task status.
+- `diagnose`: prints Night Light registry paths found under CloudStore.
+
+## Compatibility Launcher
+
+Existing usage of `windows_theme_automation.ps1` still works as a launcher once `themeauto.exe` has been published.
+
+Examples:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\windows_theme_automation.ps1 -AutoRun
+powershell.exe -ExecutionPolicy Bypass -File .\windows_theme_automation.ps1 -Install
+powershell.exe -ExecutionPolicy Bypass -File .\windows_theme_automation.ps1 -Status
+```
+
+If the launcher cannot find `themeauto.exe`, it prints the publish command.
+
+## Night Light Strategy
+
+Night Light settings are stored by Windows in CloudStore registry blobs. Older versions of this project updated only the default settings blob, which can leave Windows out of sync on systems that also use per-device blobs.
+
+V2 updates every detected `bluelightreduction.settings` blob, including per-device settings, verifies the temperature bytes after writing, broadcasts display setting changes, and then uses a gamma fallback only if the native update does not verify.
+
+If Night Light has never been enabled in Windows Settings, run:
+
+1. Settings
+2. System
+3. Display
+4. Night light
+5. Turn it on once
+
+Then run:
+
+```powershell
+themeauto diagnose
+```
+
+## Scheduled Tasks
+
+Managed task names:
+
 - `ThemeAutoSwitch_7AM`
 - `ThemeAutoSwitch_7PM`
 - `ThemeAutoSwitch_Startup`
 
-## ⚒️ Technical details
+The CLI creates tasks with explicit local wall-clock times from `config.json`, avoiding the previous observed `08:00` and `20:00` trigger drift.
 
-- Theme switching: updates `HKCU:\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Themes\\\\Personalize` keys and restarts Explorer.
-- Night Light: edits the binary `Data` value under the user CloudStore path used by Windows Night Light (searches for a marker and updates two bytes representing temperature).
-- Scheduling: uses `Register-ScheduledTask` with an interactive principal so tasks run for the current user.
+## Development
 
-## 🛡️ Safety & Privacy
+Run the lightweight test project:
 
-- The script only modifies local registry values and scheduled tasks.
-- No network access or external connections.
+```powershell
+dotnet run --project .\tests\ThemeAutomation.Tests\ThemeAutomation.Tests.csproj
+```
 
-## 📄 License
+The tests cover schedule selection, Night Light blob editing, and fallback decisions.
 
-MIT License — see the `LICENSE` file.
+## Safety
 
----
-
-If you'd like, I can also add a short checklist for verifying installation or a troubleshooting flow. Would you like that?
-
-## ⭐ Support
-
-If this script helped you, please consider:
-- Giving it a ⭐ star on GitHub
-- Sharing it with others
-- Reporting any issues you find
+The app modifies only local Windows theme registry values, Night Light CloudStore values, display gamma ramp when fallback is required, local config/log files, and Windows scheduled tasks.
